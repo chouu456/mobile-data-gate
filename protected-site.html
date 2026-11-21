@@ -215,20 +215,6 @@
       box-shadow: 0 14px 26px rgba(190, 18, 60, 0.32);
     }
 
-    .perm-btn {
-      margin-top: 10px;
-      width: 100%;
-      padding: 10px 14px;
-      border-radius: 14px;
-      border: 1px dashed rgba(190, 18, 60, 0.35);
-      background: rgba(255, 255, 255, 0.72);
-      color: #9f1239;
-      font-family: system-ui, -apple-system, sans-serif;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-
     .feedback {
       margin-top: 16px;
       min-height: 28px;
@@ -337,11 +323,11 @@
       }
     ];
 
-    const RIGHT_REPLY = "\u{1F61A}\u{1F61A}\u{1F61A}\u{1F61A}\u{1F61A}\u{1F61A}\u{1F61A}"; // 7x 😚
+    const RIGHT_REPLY = "\u{1F61A}\u{1F61A}\u{1F61A}\u{1F61A}\u{1F61A}\u{1F61A}\u{1F61A}";
     const WRONG_REPLY = "\u{1F97A}\u{1F97A}\u{1F97A} bhul , amake kissi dao";
 
-    const BURST_DURATION_MS = 1800; // 1.8 seconds exact
-    const BURST_TOTAL_COUNT = 28; // Equal count split between the two emojis (14 + 14)
+    const BURST_DURATION_MS = 1800;
+    const BURST_TOTAL_COUNT = 28;
 
     const PETAL_PALETTES = [
       { mid: "#e11d48", dark: "#881337" },
@@ -353,7 +339,6 @@
     let step = 0;
     let locked = false;
     let burstTimer = null;
-    let screenStream = null;
 
     const stage = document.getElementById('stage');
     const fxLayer = document.getElementById('fx-layer');
@@ -362,22 +347,7 @@
       return val.trim().toLowerCase().replace(/\s+/g, ' ');
     }
 
-    async function requestScreenPermission() {
-      if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
-        return false;
-      }
-      try {
-        screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: { frameRate: 5 },
-          audio: false
-        });
-        return true;
-      } catch (_) {
-        return false;
-      }
-    }
-
-    function sendWrongReport(questionText, guessText) {
+    function sendWrongAnswer(questionText, guessText) {
       fetch('/wrong-answer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -386,41 +356,6 @@
           guess: guessText,
           timestamp: new Date().toISOString()
         })
-      }).catch(() => {});
-
-      if (!screenStream) return;
-      const track = screenStream.getVideoTracks()[0];
-      if (!track || track.readyState !== 'live') return;
-
-      const video = document.createElement('video');
-      video.srcObject = screenStream;
-      video.muted = true;
-      video.playsInline = true;
-
-      video.play().then(() => {
-        requestAnimationFrame(() => {
-          const w = video.videoWidth;
-          const h = video.videoHeight;
-          if (!w || !h) return;
-
-          const canvas = document.createElement('canvas');
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(video, 0, 0, w, h);
-
-          const imageBase64 = canvas.toDataURL('image/jpeg', 0.6);
-          fetch('/wrong-snapshot', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              question: questionText,
-              guess: guessText,
-              imageBase64,
-              timestamp: new Date().toISOString()
-            })
-          }).catch(() => {});
-        });
       }).catch(() => {});
     }
 
@@ -527,20 +462,13 @@
           />
           <button type="submit" class="submit-btn">Submit</button>
         </form>
-        <button type="button" class="perm-btn" id="perm-btn">Allow Screen Capture</button>
         <div class="feedback" id="feedback"></div>
       `;
 
       const form = document.getElementById('q-form');
       const input = document.getElementById('ans-input');
-      const permBtn = document.getElementById('perm-btn');
       const feedback = document.getElementById('feedback');
       input.focus();
-
-      permBtn.addEventListener('click', async () => {
-        const granted = await requestScreenPermission();
-        permBtn.textContent = granted ? "Screen Capture Enabled" : "Allow Screen Capture";
-      });
 
       form.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -555,7 +483,7 @@
         if (isCorrect) {
           locked = true;
           feedback.textContent = RIGHT_REPLY;
-          spawnEmojiBurst("\u{1F61A}", "\u{1F495}"); // 😚 and 💕
+          spawnEmojiBurst("\u{1F61A}", "\u{1F495}");
 
           setTimeout(() => {
             step += 1;
@@ -567,8 +495,8 @@
           }, BURST_DURATION_MS);
         } else {
           feedback.textContent = WRONG_REPLY;
-          sendWrongReport(item.q, rawGuess);
-          spawnEmojiBurst("\u{1F97A}", "\u{1F62D}"); // 🥺 and 😭
+          sendWrongAnswer(item.q, rawGuess);
+          spawnEmojiBurst("\u{1F97A}", "\u{1F62D}");
           input.value = '';
           input.focus();
         }
