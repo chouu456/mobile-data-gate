@@ -5,59 +5,124 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.set('trust proxy', true);
+app.use(express.json({ limit: '5mb' }));
+
+const BROADBAND_KEYWORDS = [
+  'broadband',
+  'fiber',
+  'fibre',
+  'dsl',
+  'adsl',
+  'vdsl',
+  'cable',
+  'ftth',
+  'fttx',
+  'act fibernet',
+  'hathway',
+  'tikona',
+  'excitel',
+  'you broadband',
+  'alliance broadband',
+  'wishnet',
+  'gtpl',
+  'spectra',
+  'comcast',
+  'verizon fios',
+  'at&t internet',
+  'spectrum',
+  'cox',
+  'bt ',
+  'virgin media',
+  'sky broadband'
+];
 
 function getClientIp(req) {
   const forwarded = req.headers['x-forwarded-for'];
-  let ip = Array.isArray(forwarded)
-    ? forwarded[0]
-    : (forwarded ? forwarded.split(',')[0].trim() : req.ip || req.socket.remoteAddress || '');
-
-  if (ip.startsWith('::ffff:')) {
-    ip = ip.slice(7);
+  if (typeof forwarded === 'string' && forwarded.length > 0) {
+    return forwarded.split(',')[0].trim();
   }
-  return ip;
+  return (req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+}
+
+function isLocalIp(ip) {
+  return (
+    !ip ||
+    ip === '127.0.0.1' ||
+    ip === '::1' ||
+    ip.startsWith('10.') ||
+    ip.startsWith('192.168.') ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(ip)
+  );
 }
 
 async function mobileDataOnly(req, res, next) {
   try {
     const clientIp = getClientIp(req);
 
-    if (!clientIp || clientIp === '127.0.0.1' || clientIp === '::1') {
-      return res.status(403).send(blockedPage(
-        'Localhost Detected',
-        'Open this through your live Render URL to test with a real mobile data IP.'
-      ));
-    }
-
-    const apiUrl = `http://ip-api.com/json/${encodeURIComponent(clientIp)}?fields=status,message,isp,mobile,proxy,hosting`;
-    const response = await fetch(apiUrl);
-    const data = await response.json();
-
-    if (data.status !== 'success') {
-      return res.status(503).send(blockedPage(
-        'Verification Unavailable',
-        'We could not verify your network connection right now. Please try again.'
-      ));
-    }
-
-    if (data.mobile === true && data.proxy === false && data.hosting === false) {
+    if (isLocalIp(clientIp)) {
       return next();
     }
 
-    const reason = (data.proxy || data.hosting)
-      ? 'a VPN, Proxy, or Hosting network'
-      : `Wi-Fi / Broadband (${data.isp || 'Unknown ISP'})`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3500);
 
-    return res.status(403).send(blockedPage(
-      'Mobile Data Only',
-      `You are currently using <strong>${reason}</strong>. Please turn off Wi-Fi and any VPN, then switch to <strong>Mobile Data</strong> to open this website.`
-    ));
+    const response = await fetch(
+      `http://ip-api.com/json/${encodeURIComponent(clientIp)}?fields=status,mobile,proxy,hosting,isp,org`,
+      { signal: controller.signal }
+    );
+    clearTimeout(timeout);
+
+    const data = await response.json();
+
+    if (data && data.status === 'success') {
+      const ispText = `${data.isp || ''} ${data.org || ''}`.toLowerCase();
+      const isBroadbandIsp = BROADBAND_KEYWORDS.some((kw) => ispText.includes(kw));
+
+      if (data.mobile === true && !data.proxy && !data.hosting && !isBroadbandIsp) {
+        return next();
+      }
+    }
+
+    return res.status(403).send(`
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Mobile Data Only</title>
+        <style>
+          body {
+            margin: 0;
+            min-height: 100dvh;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            font-family: system-ui, -apple-system, sans-serif;
+            background: linear-gradient(155deg, #fff0f4 0%, #ffdbe4 50%, #ffc8d6 100%);
+            color: #9f1239;
+            text-align: center;
+          }
+          .box {
+            max-width: 420px;
+            padding: 32px 24px;
+            border-radius: 24px;
+            background: rgba(255, 255, 255, 0.85);
+            box-shadow: 0 20px 50px rgba(159, 18, 57, 0.15);
+          }
+          h1 { margin: 0 0 10px; font-size: 24px; }
+          p { margin: 0; font-size: 15px; line-height: 1.5; color: #881337; }
+        </style>
+      </head>
+      <body>
+        <div class="box">
+          <h1>Mobile Data Only</h1>
+          <p>Turn off Wi-Fi and open this link using mobile data.</p>
+        </div>
+      </body>
+      </html>
+    `);
   } catch (err) {
-    console.error('Network check failed:', err.message);
-    return res.status(500).send(blockedPage(
-      'Connection Check Error',
-      'Something went wrong while checking your network. Please reload and try again.'
-    ));
+    return res.status(503).send('Unable to verify mobile connection. Please try again on mobile data.');
   }
 }
 
@@ -65,44 +130,23 @@ app.get('/', mobileDataOnly, (req, res) => {
   res.sendFile(path.join(__dirname, 'protected-site.html'));
 });
 
-function blockedPage(title, message) {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mobile Data Required</title>
-  <style>
-    body {
-      margin: 0; min-height: 100vh; display: grid; place-items: center;
-      background: #0f172a; color: #f8fafc; font-family: system-ui, sans-serif; padding: 20px;
-    }
-    .card {
-      max-width: 440px; width: 100%; background: #1e293b; border: 1px solid #334155;
-      border-radius: 14px; padding: 32px; text-align: center; box-shadow: 0 12px 30px rgba(0,0,0,0.4);
-    }
-    .icon { font-size: 48px; margin-bottom: 12px; }
-    h1 { margin: 0 0 12px; font-size: 24px; color: #f87171; }
-    p { margin: 0 0 24px; color: #cbd5e1; line-height: 1.6; }
-    button {
-      background: #2563eb; color: #fff; border: 0; border-radius: 8px;
-      padding: 12px 20px; font-size: 15px; font-weight: 600; cursor: pointer;
-    }
-    button:hover { background: #1d4ed8; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="icon">📶🚫</div>
-    <h1>${title}</h1>
-    <p>${message}</p>
-    <button onclick="window.location.reload()">I Switched to Mobile Data</button>
-  </div>
-</body>
-</html>`;
-}
+app.post('/wrong-answer', mobileDataOnly, (req, res) => {
+  const { question, guess, timestamp } = req.body || {};
+  if (typeof guess === 'string' && guess.trim()) {
+    console.log(`[WRONG ANSWER] ${timestamp || ''} | Q: "${question || ''}" | Guess: "${guess.trim()}"`);
+  }
+  res.sendStatus(204);
+});
+
+app.post('/wrong-snapshot', mobileDataOnly, (req, res) => {
+  const { question, guess, imageBase64, timestamp } = req.body || {};
+  console.log(
+    `[WRONG SNAPSHOT] ${timestamp || ''} | Q: "${question || ''}" | Guess: "${guess || ''}" | Bytes: ${imageBase64 ? imageBase64.length : 0}`
+  );
+  res.sendStatus(204);
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
-                              
+      
