@@ -99,8 +99,8 @@
       line-height: 1;
       user-select: none;
       will-change: transform, opacity;
-      animation-name: fallSlowBurst;
-      animation-timing-function: ease-in-out;
+      animation-name: constantEmojiFall;
+      animation-timing-function: linear;
       animation-fill-mode: forwards;
     }
 
@@ -119,8 +119,8 @@
         0 6px 14px rgba(136, 19, 55, 0.18);
       opacity: 0;
       will-change: transform, opacity;
-      animation-name: realPetalFall;
-      animation-timing-function: ease-in-out;
+      animation-name: constantPetalFall;
+      animation-timing-function: linear;
       animation-fill-mode: forwards;
     }
 
@@ -249,45 +249,36 @@
       letter-spacing: 0;
     }
 
-    @keyframes fallSlowBurst {
+    @keyframes constantEmojiFall {
       0% {
-        transform: translate3d(0, 0, 0) rotate(0deg) scale(0.9);
+        transform: translate3d(0, 0, 0) rotate(0deg);
         opacity: 0;
       }
-      15% {
+      8% {
         opacity: 1;
       }
-      50% {
-        transform: translate3d(calc(var(--drift-x, 0px) * 0.55), 42dvh, 0) rotate(calc(var(--spin, 140deg) * 0.5)) scale(1);
-      }
-      85% {
-        opacity: 0.95;
+      92% {
+        opacity: 1;
       }
       100% {
-        transform: translate3d(var(--drift-x, 0px), 84dvh, 0) rotate(var(--spin, 140deg)) scale(0.98);
+        transform: translate3d(var(--drift-x, 0px), 108dvh, 0) rotate(var(--spin, 120deg));
         opacity: 0;
       }
     }
 
-    @keyframes realPetalFall {
+    @keyframes constantPetalFall {
       0% {
-        transform: translate3d(0, 0, 0) rotate3d(1, 0.4, 0.2, 0deg) scale(0.82);
+        transform: translate3d(0, 0, 0) rotate(0deg);
         opacity: 0;
       }
-      14% {
+      10% {
         opacity: 0.94;
       }
-      35% {
-        transform: translate3d(calc(var(--sway, 45px) * 0.45), 34dvh, 0) rotate3d(1, 0.5, 0.3, 125deg) scale(1);
-      }
-      70% {
-        transform: translate3d(calc(var(--sway, 45px) * -0.25), 72dvh, 0) rotate3d(0.8, 1, 0.2, 250deg) scale(0.96);
-      }
-      88% {
-        opacity: 0.85;
+      90% {
+        opacity: 0.92;
       }
       100% {
-        transform: translate3d(var(--sway, 45px), 110dvh, 0) rotate3d(1, 0.6, 0.4, 380deg) scale(0.88);
+        transform: translate3d(var(--sway, 40px), 110dvh, 0) rotate(var(--spin, 220deg));
         opacity: 0;
       }
     }
@@ -339,10 +330,10 @@
     const BURST_TOTAL_COUNT = 28; // Equal count split between the two emojis (14 + 14)
 
     const PETAL_PALETTES = [
-      { mid: "#e11d48", dark: "#881337" }, // Classic crimson rose
-      { mid: "#fb7185", dark: "#be123c" }, // Soft rose pink
-      { mid: "#f43f5e", dark: "#9f1239" }, // Deep velvet rose
-      { mid: "#fda4af", dark: "#e11d48" }  // Blush petal
+      { mid: "#e11d48", dark: "#881337" },
+      { mid: "#fb7185", dark: "#be123c" },
+      { mid: "#f43f5e", dark: "#9f1239" },
+      { mid: "#fda4af", dark: "#e11d48" }
     ];
 
     let step = 0;
@@ -381,9 +372,8 @@
 
         const leftPercent = 4 + ((idx + 0.5) / pool.length) * 90 + (Math.random() * 4 - 2);
         const sizePx = 23 + Math.floor(Math.random() * 12);
-        const driftX = Math.floor(Math.random() * 56 - 28);
-        const spinDeg = Math.floor(Math.random() * 190 - 95);
-        // Slower fall speed across the 1.8s window
+        const driftX = Math.floor(Math.random() * 44 - 22);
+        const spinDeg = Math.floor(Math.random() * 150 - 75);
         const maxStartDelay = Math.max(0, BURST_DURATION_MS - 1450);
         const delayMs = Math.floor((idx / pool.length) * maxStartDelay);
         const fallDurationMs = Math.min(BURST_DURATION_MS - delayMs, 1550 + Math.floor(Math.random() * 250));
@@ -392,7 +382,7 @@
         el.style.fontSize = `${sizePx}px`;
         el.style.setProperty('--drift-x', `${driftX}px`);
         el.style.setProperty('--spin', `${spinDeg}deg`);
-        el.style.animationDuration = `${Math.max(950, fallDurationMs)}ms`;
+        el.style.animationDuration = `${Math.max(1000, fallDurationMs)}ms`;
         el.style.animationDelay = `${delayMs}ms`;
 
         fxLayer.appendChild(el);
@@ -417,10 +407,10 @@
         const leftPct = Math.random() * 96;
         const widthPx = 18 + Math.floor(Math.random() * 12);
         const heightPx = Math.round(widthPx * (1.15 + Math.random() * 0.25));
-        const swayPx = Math.floor(Math.random() * 110 - 55);
-        const spinDeg = Math.floor(Math.random() * 340 - 170);
-        const delayMs = Math.floor(Math.random() * 850);
-        const durationMs = 1850 + Math.floor(Math.random() * 850);
+        const swayPx = Math.floor(Math.random() * 80 - 40);
+        const spinDeg = Math.floor(Math.random() * 240 - 120);
+        const delayMs = Math.floor(Math.random() * 750);
+        const durationMs = 1950 + Math.floor(Math.random() * 650);
 
         petal.style.left = `${leftPct}%`;
         petal.style.setProperty('--petal-w', `${widthPx}px`);
